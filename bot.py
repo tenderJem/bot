@@ -32,7 +32,7 @@ def run_web_server():
 threading.Thread(target=run_web_server, daemon=True).start()
 
 # Конфигурация бота
-BOT_TOKEN = "8528672756:AAFekL_eklAvcJXaLxozRdZ1wfARz-tN-lY"
+BOT_TOKEN = "8528672756:AAHkqf2Ej-Lhy0HjUvCNyzr2Pax18uuraqM"
 TIMEZONE_NAME = "Asia/Sakhalin"
 TZ = pytz.timezone(TIMEZONE_NAME)
 
