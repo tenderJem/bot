@@ -1,21 +1,20 @@
-import os
+ import os
 import sys
 import asyncio
 import logging
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
-import requests
 import pytz
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# Буферизация вывода
 sys.stdout.reconfigure(line_buffering=True)
 logging.basicConfig(level=logging.INFO)
 
-# Мини веб-сервер для удержания порта на Render
+# Мини-сервер для порта Render
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -32,7 +31,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Конфигурация
+# Конфигурация бота
 BOT_TOKEN = "8528672756:AAFekL_eklAvcJXaLxozRdZ1wfARz-tN-lY"
 TIMEZONE_NAME = "Asia/Sakhalin"
 TZ = pytz.timezone(TIMEZONE_NAME)
@@ -41,144 +40,146 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 scheduler = AsyncIOScheduler(timezone=TZ)
 
-GROUP_QUERY = "OE-2401"
-API_BASE_URL = "https://time.spetpro.ru/api"
-
-# Звонки пар по умолчанию (для команды /now)
-LESSON_BELLS = {
-    1: ("08:30", "10:00"),
-    2: ("10:15", "11:45"),
-    3: ("12:15", "13:45"),
-    4: ("14:00", "15:30"),
-    5: ("15:45", "17:15"),
-    6: ("17:25", "18:55"),
+# Расписание ОЭ-2401 (0 = Понедельник, 1 = Вторник, ..., 6 = Воскресенье)
+SCHEDULE = {
+    0: [
+        {"num": 1, "time": "09:40 - 11:00", "subject": "ТРМиНЭиЭМО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 2, "time": "11:10 - 12:30", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 3, "time": "13:00 - 14:20", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 4, "time": "14:30 - 15:50", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+    ],
+    1: [
+        {
+            "num": 1, 
+            "time": "09:00 - 10:20", 
+            "subject": "Иностранный язык в ПД", 
+            "subgroups": [
+                {"name": "1 п/г", "teacher": "Мезенцева В.А.", "room": "34"},
+                {"name": "2 п/г", "teacher": "Прошакова И.В.", "room": "41"},
+            ]
+        },
+        {"num": 2, "time": "10:30 - 11:50", "subject": "БЖД", "teacher": "Горбунова А.Л.", "room": "8"},
+        {"num": 3, "time": "12:20 - 13:40", "subject": "БЖД", "teacher": "Горбунова А.Л.", "room": "8"},
+        {"num": 4, "time": "13:50 - 15:10", "subject": "Физическая культура", "teacher": "Родя К.С.", "room": "СЗ"},
+    ],
+    2: [
+        {"num": 1, "time": "09:00 - 10:20", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 2, "time": "10:30 - 11:50", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 3, "time": "12:20 - 13:40", "subject": "ТРМиНЭиЭМО", "teacher": "Тучин В.В.", "room": "32"},
+    ],
+    3: [
+        {"num": 1, "time": "09:00 - 10:20", "subject": "БЖД", "teacher": "Горбунова А.Л.", "room": "8"},
+        {"num": 2, "time": "10:30 - 11:50", "subject": "БЖД", "teacher": "Горбунова А.Л.", "room": "8"},
+    ],
+    4: [
+        {"num": 1, "time": "09:00 - 10:20", "subject": "ТРМиНЭиЭМО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 2, "time": "10:30 - 11:50", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+        {"num": 3, "time": "12:20 - 13:40", "subject": "ООРпоИДЭО", "teacher": "Тучин В.В.", "room": "32"},
+    ],
+    5: [],
+    6: []
 }
 
-def fetch_group_schedule(target_date: datetime):
-    date_str = target_date.strftime("%Y-%m-%d")
-    urls_to_try = [
-        f"{API_BASE_URL}/timetable?group={GROUP_QUERY}&date={date_str}",
-        f"{API_BASE_URL}/schedule/{GROUP_QUERY}?date={date_str}",
-        f"{API_BASE_URL}/schedule?group={GROUP_QUERY}",
-    ]
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json"
-    }
+site_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="🌐 Открыть сайт СПЭТ", url="https://time.spetpro.ru/#s/OE-2401")]
+])
 
-    for url in urls_to_try:
-        try:
-            res = requests.get(url, headers=headers, timeout=8)
-            if res.status_code == 200:
-                data = res.json()
-                if data:
-                    return data
-        except Exception as e:
-            logging.warning(f"Ошибка запроса {url}: {e}")
-
-    return None
-
-def format_schedule_message(target_date: datetime, data) -> str:
+def render_schedule(target_date: datetime) -> str:
+    weekday = target_date.weekday()
     date_label = target_date.strftime("%d.%m.%Y")
     days_ru = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
-    day_name = days_ru[target_date.weekday()]
+    day_name = days_ru[weekday]
 
-    if not data:
-        return (
-            f"📅 <b>{day_name}, {date_label}</b>\n\n"
-            f"⚠️ Расписание на сайте еще не опубликовано или пар нет.\n"
-            f"Ссылка на сайт: https://time.spetpro.ru/#s/{GROUP_QUERY}"
-        )
-
-    lessons = []
-    if isinstance(data, dict):
-        lessons = data.get("lessons") or data.get("items") or data.get("schedule") or []
-    elif isinstance(data, list):
-        lessons = data
+    lessons = SCHEDULE.get(weekday, [])
 
     if not lessons:
-        return f"📅 <b>{day_name}, {date_label}</b>\n\n🎉 Пар нет, выходной день!"
+        return f"📅 <b>{day_name}, {date_label}</b>\n\n🎉 Занятий нет, выходной день!"
 
     text = f"📚 <b>Расписание ОЭ-2401 на {day_name} ({date_label}):</b>\n\n"
 
-    for idx, item in enumerate(lessons, 1):
-        num = item.get("num") or item.get("lesson_number") or idx
-        subject = item.get("subject") or item.get("name") or "Дисциплина не указана"
-        room = item.get("room") or item.get("cabinet") or "—"
-        teacher = item.get("teacher") or item.get("fio") or ""
-        time_slot = LESSON_BELLS.get(int(num), ("", ""))
-        time_text = f" ({time_slot[0]} - {time_slot[1]})" if time_slot[0] else ""
+    for item in lessons:
+        num = item["num"]
+        time_slot = item["time"]
+        subject = item["subject"]
 
-        text += f"🔹 <b>{num} пара{time_text}</b>\n"
-        text += f"📖 <i>{subject}</i>\n"
-        text += f"🚪 Кабинет: <b>{room}</b>"
-        if teacher:
-            text += f" | 👤 {teacher}"
-        text += "\n\n"
+        text += f"🔹 <b>{num} пара ({time_slot})</b>\n"
+        text += f"📖 <b>{subject}</b>\n"
+
+        if "subgroups" in item:
+            for sg in item["subgroups"]:
+                text += f"  ▫️ {sg['name']}: {sg['teacher']} | Каб: <b>{sg['room']}</b>\n"
+        else:
+            text += f"🚪 Кабинет: <b>{item['room']}</b> | 👤 {item['teacher']}\n"
+        text += "\n"
 
     return text
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
-        "👋 Бот расписания для группы <b>ОЭ-2401</b> запущен!\n\n"
-        "Доступные команды:\n"
+        "👋 Бот расписания для группы <b>ОЭ-2401</b> готов!\n\n"
+        "Команды:\n"
         "▪ /today — Расписание на сегодня\n"
         "▪ /tomorrow — Расписание на завтра\n"
-        "▪ /now — Текущая пара\n\n"
-        "🌐 Ссылка: https://time.spetpro.ru/#s/OE-2401",
+        "▪ /now — Текущая пара",
+        reply_markup=site_keyboard,
         parse_mode="HTML"
     )
 
 @dp.message(Command("today"))
 async def cmd_today(message: types.Message):
     now = datetime.now(TZ)
-    data = fetch_group_schedule(now)
-    text = format_schedule_message(now, data)
-    await message.answer(text, parse_mode="HTML")
+    text = render_schedule(now)
+    await message.answer(text, reply_markup=site_keyboard, parse_mode="HTML")
 
 @dp.message(Command("tomorrow"))
 async def cmd_tomorrow(message: types.Message):
     tomorrow = datetime.now(TZ) + timedelta(days=1)
-    data = fetch_group_schedule(tomorrow)
-    text = format_schedule_message(tomorrow, data)
-    await message.answer(text, parse_mode="HTML")
+    text = render_schedule(tomorrow)
+    await message.answer(text, reply_markup=site_keyboard, parse_mode="HTML")
 
 @dp.message(Command("now"))
 async def cmd_now(message: types.Message):
     now = datetime.now(TZ)
+    weekday = now.weekday()
     current_time = now.strftime("%H:%M")
-    
-    current_lesson = None
-    next_lesson = None
+    lessons = SCHEDULE.get(weekday, [])
 
-    for num, (start, end) in LESSON_BELLS.items():
-        if start <= current_time <= end:
-            current_lesson = num
+    if not lessons:
+        await message.answer("🎉 Сегодня пар нет!", reply_markup=site_keyboard)
+        return
+
+    current_item = None
+    next_item = None
+
+    for item in lessons:
+        start_str, end_str = item["time"].split(" - ")
+        if start_str <= current_time <= end_str:
+            current_item = item
             break
-        elif current_time < start and next_lesson is None:
-            next_lesson = (num, start)
+        elif current_time < start_str and next_item is None:
+            next_item = item
 
-    if current_lesson:
-        await message.answer(
-            f"⏱ Сейчас идет <b>{current_lesson}-я пара</b> (звонок до {LESSON_BELLS[current_lesson][1]}).\n"
-            f"Посмотреть аудиторию: /today",
-            parse_mode="HTML"
-        )
-    elif next_lesson:
-        await message.answer(
-            f"☕️ Сейчас перемена или пары еще не начались.\n"
-            f"Следующая пара: <b>{next_lesson[0]}-я</b>, начало в <b>{next_lesson[1]}</b>.",
-            parse_mode="HTML"
-        )
+    if current_item:
+        msg = f"⏱ <b>Сейчас идет {current_item['num']}-я пара ({current_item['time']})</b>\n"
+        msg += f"📖 {current_item['subject']}\n"
+        if "subgroups" in current_item:
+            for sg in current_item["subgroups"]:
+                msg += f"  ▫️ {sg['name']}: каб. <b>{sg['room']}</b> ({sg['teacher']})\n"
+        else:
+            msg += f"🚪 Кабинет: <b>{current_item['room']}</b> ({current_item['teacher']})"
+        await message.answer(msg, reply_markup=site_keyboard, parse_mode="HTML")
+    elif next_item:
+        start_str = next_item["time"].split(" - ")[0]
+        msg = f"☕️ <b>Сейчас перемена!</b>\n"
+        msg += f"Следующая <b>{next_item['num']}-я пара</b> начнется в <b>{start_str}</b>:\n"
+        msg += f"📖 {next_item['subject']}"
+        await message.answer(msg, reply_markup=site_keyboard, parse_mode="HTML")
     else:
-        await message.answer("🌙 Все пары на сегодня уже закончились!", parse_mode="HTML")
+        await message.answer("🌙 Все пары на сегодня уже завершены!", reply_markup=site_keyboard)
 
 async def main():
-    print("Сбрасываем вебхук...", flush=True)
     await bot.delete_webhook(drop_pending_updates=True)
-    print("Бот готов к обработке команд!", flush=True)
     scheduler.start()
     await dp.start_polling(bot)
 
