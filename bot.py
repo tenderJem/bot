@@ -15,9 +15,9 @@ BOT_TOKEN = "8635045900:AAFK5nAWR7RA8HL3ZGMuC6rgPIxiuuzF7Z4"
 # 2. Твой личный ID от @userinfobot:
 USER_CHAT_ID = 8380835222
 
-# Группа и таймзона (Asia/Yuzhno-Sakhalinsk для СПЭТ, UTC+11)
+# Группа и таймзона (Asia/Sakhalin для СПЭТ, UTC+11)
 GROUP_NAME = "ОЭ-2401"
-TIMEZONE_NAME = "Asia/Yuzhno-Sakhalinsk"
+TIMEZONE_NAME = "Asia/Sakhalin"
 TIMEZONE = pytz.timezone(TIMEZONE_NAME)
 # ================================================
 
