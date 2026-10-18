@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ================= КОНФИГУРАЦИЯ =================
 # 1. Токен от @BotFather:
-BOT_TOKEN = 8528672756:AAFxLXisoJaFlwifjehh_SMd2m2lQEBZ3S0
+BOT_TOKEN = "8528672756:AAFxLXisoJaFlwifjehh_SMd2m2lQEBZ3S0"
 # 2. Твой личный ID от @userinfobot:
 USER_CHAT_ID = 8380835222
 
